@@ -10,13 +10,14 @@
     position: fixed; bottom: 20px; right: 20px; width: 350px;
     background: #fff; border: 1px solid #d97757; border-radius: 12px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.25); z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-    display: flex; flex-direction: column; overflow: hidden; user-select: none;
+    font-family: -apple-system, sans-serif; display: flex; 
+    flex-direction: column; overflow: hidden; user-select: none;
   `;
 
+  // Draggable Header
   panel.innerHTML = `
     <div id="cl-drag-handle" style="background:#d97757; color:white; padding:12px; font-weight:700; font-size:11px; display:flex; justify-content:space-between; align-items:center; cursor: move; letter-spacing: 0.5px;">
-      <span>CLAUDE POINT & EDIT V2</span>
+      <span>POINT 2 PROMPT</span>
       <span id="cl-count" style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:10px;">0 Items</span>
     </div>
     <div id="cl-list" style="max-height: 300px; overflow-y: auto; padding: 10px; background:#fcfcfc; display:flex; flex-direction:column; gap:10px; user-select: text;">
@@ -42,22 +43,23 @@
     isDragging = true;
     offsetX = e.clientX - panel.getBoundingClientRect().left;
     offsetY = e.clientY - panel.getBoundingClientRect().top;
-    panel.style.transition = 'none';
+    panel.style.transition = 'none'; // Disable transition while dragging
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
     panel.style.left = `${e.clientX - offsetX}px`;
     panel.style.top = `${e.clientY - offsetY}px`;
-    panel.style.bottom = 'auto';
-    panel.style.right = 'auto';
+    panel.style.bottom = 'auto'; // Remove bottom constraint
+    panel.style.right = 'auto';  // Remove right constraint
   });
 
-  document.addEventListener('mouseup', () => { isDragging = false; });
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
 
   // --- SELECTION LOGIC ---
   const overlay = document.createElement('div');
-  overlay.id = 'cl-bridge-overlay';
   overlay.style.cssText = 'position:fixed; border:2px solid #d97757; background:rgba(217,119,87,0.1); pointer-events:none; z-index:2147483646; display:none;';
   document.body.appendChild(overlay);
 
@@ -80,16 +82,6 @@
     const index = selectedElements.length + 1;
     const rect = el.getBoundingClientRect();
     
-    // Smart ID Logic
-    const tag = el.tagName.toLowerCase();
-    const classes = Array.from(el.classList).join('.');
-    const textContent = el.innerText ? el.innerText.split('\n')[0].substring(0, 30).trim() : '';
-    const parent = el.parentElement;
-    const parentInfo = parent ? `${parent.tagName.toLowerCase()}${parent.className ? '.' + parent.className.split(' ')[0] : ''}` : 'none';
-    const siblings = Array.from(parent ? parent.children : []);
-    const siblingIndex = siblings.indexOf(el) + 1;
-    const selectorPath = `${parentInfo} > ${tag}${classes ? '.' + classes.split('.')[0] : ''} (pos: ${siblingIndex})`;
-
     const marker = document.createElement('div');
     marker.className = 'cl-marker-badge';
     marker.style.cssText = `
@@ -101,15 +93,8 @@
     marker.innerText = index;
     document.body.appendChild(marker);
 
-    selectedElements.push({ 
-        selector: selectorPath, 
-        html: el.outerHTML.substring(0, 600),
-        text: textContent,
-        parent: parentInfo,
-        pos: siblingIndex,
-        marker: marker, 
-        individualPrompt: '' 
-    });
+    const selector = el.id ? `#${el.id}` : el.className ? `.${el.className.split(' ')[0]}` : el.tagName.toLowerCase();
+    selectedElements.push({ selector, html: el.outerHTML.substring(0, 300), marker, individualPrompt: '' });
 
     renderList();
   };
@@ -120,13 +105,10 @@
     list.innerHTML = '';
     selectedElements.forEach((item, i) => {
       const itemDiv = document.createElement('div');
-      itemDiv.style.cssText = 'background:white; padding:10px; border:1px solid #eee; border-radius:8px; display:flex; flex-direction:column; gap:4px; margin-bottom:8px;';
+      itemDiv.style.cssText = 'background:white; padding:10px; border:1px solid #eee; border-radius:8px; display:flex; flex-direction:column; gap:6px;';
       itemDiv.innerHTML = `
-        <div style="font-size:10px; font-weight:700; color:#d97757; display:flex; justify-content:space-between; align-items:center;">
-            <span>ITEM ${i+1}: ${item.selector}</span>
-            <span style="color:#999; font-style:italic;">${item.text ? '"' + item.text + '"' : ''}</span>
-        </div>
-        <input type="text" class="cl-indiv-input" data-index="${i}" placeholder="Specific change for this item..." 
+        <div style="font-size:10px; font-weight:700; color:#d97757;">ITEM ${i+1}: ${item.selector}</div>
+        <input type="text" class="cl-indiv-input" data-index="${i}" placeholder="Specific change..." 
           style="width:100%; border:1px solid #eee; border-radius:4px; padding:6px; font-size:12px; outline:none;" 
           value="${item.individualPrompt}">
       `;
@@ -140,26 +122,10 @@
   document.getElementById('cl-submit-all').onclick = () => {
     const globalPrompt = document.getElementById('cl-group-prompt').value;
     if (selectedElements.length === 0) return;
-
-    const itemsContext = selectedElements.map((el, i) => {
-        return `[ELEMENT ${i+1}]
-- Identity: ${el.selector}
-- Text Content: "${el.text}"
-- Position: Index ${el.pos} inside ${el.parent}
-- HTML Snippet: ${el.html}
-- Task: ${el.individualPrompt || 'Refer to Global Instruction'}`;
-    }).join('\n\n---\n\n');
-
-    const finalPrompt = `I've selected multiple UI elements for modification. Please use the deep context below to identify and update them:
-
-${itemsContext}
-
-GLOBAL DESIGN INSTRUCTION: ${globalPrompt}`;
-
+    const itemsContext = selectedElements.map((el, i) => `[Item ${i+1}] Selector: ${el.selector}\nTask: ${el.individualPrompt || 'Follow global'}`).join('\n\n');
+    const finalPrompt = `MULTI-ELEMENT UPDATE:\n${itemsContext}\n\nGLOBAL INSTRUCTION: ${globalPrompt}`;
     window.location.href = `vscode://anthropic.claude-code/open?prompt=${encodeURIComponent(finalPrompt)}`;
-
-    panel.innerHTML = `<div style="padding:30px; text-align:center; color:#d97757; font-weight:700;">🚀 PROMPTS SENT!<br><span style="font-size:12px; font-weight:400; color:#666;">Refreshing in 5s...</span></div>`;
-    
+    panel.innerHTML = `<div style="padding:30px; text-align:center; color:#d97757; font-weight:700;">🚀 Sent! Refreshing...</div>`;
     setTimeout(() => { cleanup(); window.location.reload(); }, 5000);
   };
 
@@ -167,8 +133,7 @@ GLOBAL DESIGN INSTRUCTION: ${globalPrompt}`;
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('click', onClick, true);
     document.querySelectorAll('.cl-marker-badge').forEach(m => m.remove());
-    overlay.remove(); 
-    panel.remove();
+    overlay.remove(); panel.remove();
   }
 
   document.getElementById('cl-cancel-all').onclick = cleanup;

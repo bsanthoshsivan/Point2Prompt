@@ -202,10 +202,6 @@
 
         // const finalPrompt = `I am using a visual selection tool. Please use the "ITEM #" references in my instructions to identify which elements I am talking about.
         
-        
-        
-        
-        
         // ${itemsContext}
 
         // USER INSTRUCTIONS:
